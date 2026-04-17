@@ -172,8 +172,8 @@ For deployed cron:
 
 - endpoint: `GET /api/cron/sync`
 - auth: `Authorization: Bearer $CRON_SECRET` when `CRON_SECRET` is set
-- Vercel cron is configured to run every 30 minutes
-- each hosted run processes the next batch for the current day until the catalog is complete
+- Vercel Hobby cron is configured daily
+- the underlying sync engine still works in batches, but the hosted cron runs the full daily sync in one invocation
 
 ## Model Training
 
