@@ -8,3 +8,5 @@ export async function POST() {
     message: `Sync completed. Processed ${result.cardsProcessed} cards and stored ${result.recordsInserted} pricing rows.`,
   });
 }
+
+export const maxDuration = 300;

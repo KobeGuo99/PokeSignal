@@ -1,6 +1,9 @@
 import { PriceSource, Prisma, SyncStatus } from "@prisma/client";
 
-import { fetchTcgdexSyncRecords } from "@/lib/api/providers/tcgdex";
+import {
+  fetchTcgdexSyncRecordsForCandidates,
+  listEnglishCardCandidates,
+} from "@/lib/api/providers/tcgdex";
 import { signalConfig } from "@/lib/config/signal-config";
 import { prisma } from "@/lib/db/prisma";
 import { computeFeatureSnapshot } from "@/lib/features/calculations";
@@ -10,6 +13,11 @@ import { toStartOfDay } from "@/lib/utils/date";
 import { logger } from "@/lib/utils/logger";
 
 const SNAPSHOT_PERSIST_CONCURRENCY = 8;
+
+type RunSyncOptions = {
+  maxBatches?: number;
+  limit?: number | null;
+};
 
 function rarityScore(rarity: string | null): number | null {
   if (!rarity) {
@@ -22,6 +30,24 @@ function rarityScore(rarity: string | null): number | null {
 
 function decimal(value: number | null): Prisma.Decimal | null {
   return value === null ? null : new Prisma.Decimal(value);
+}
+
+async function getSyncedExternalIdsForDate(priceDate: Date): Promise<Set<string>> {
+  const rows = await prisma.cardPriceSnapshot.findMany({
+    where: {
+      source: PriceSource.TCGDEX,
+      priceDate,
+    },
+    select: {
+      card: {
+        select: {
+          externalId: true,
+        },
+      },
+    },
+  });
+
+  return new Set(rows.map((row) => row.card.externalId));
 }
 
 export async function recomputeCardAnalytics(cardId: string, asOfDate?: Date) {
@@ -133,8 +159,11 @@ export async function recomputeCardAnalytics(cardId: string, asOfDate?: Date) {
   return recommendation;
 }
 
-export async function runSync(syncDate = new Date()) {
+export async function runSync(syncDate = new Date(), options: RunSyncOptions = {}) {
   const priceDate = toStartOfDay(syncDate);
+  const batchSize = signalConfig.sync.batchSize;
+  const maxBatches = Math.max(1, options.maxBatches ?? Number.MAX_SAFE_INTEGER);
+  const limit = options.limit ?? signalConfig.sync.cardLimit;
   const syncRun = await prisma.syncRun.create({
     data: {
       status: SyncStatus.RUNNING,
@@ -142,113 +171,146 @@ export async function runSync(syncDate = new Date()) {
   });
 
   try {
-    const syncRecords = await fetchTcgdexSyncRecords(signalConfig.sync.cardLimit, priceDate);
+    const candidates = await listEnglishCardCandidates(limit);
+    const processedExternalIds = await getSyncedExternalIdsForDate(priceDate);
+    const remainingCandidates = candidates.filter(
+      (candidate) => !processedExternalIds.has(candidate.cardId),
+    );
+
+    let recordsFetched = 0;
     let recordsInserted = 0;
+    let cardsProcessed = 0;
+    let errorsCount = 0;
+    let batchesProcessed = 0;
 
-    const upsertedCards = await Promise.all(
-      syncRecords.map((record) =>
-        prisma.card.upsert({
-          where: { externalId: record.metadata.externalId },
-          create: {
-            ...record.metadata,
-            metadata: record.metadata.metadata as Prisma.InputJsonValue,
-          },
-          update: {
-            ...record.metadata,
-            metadata: record.metadata.metadata as Prisma.InputJsonValue,
-          },
-        }),
-      ),
-    );
+    while (remainingCandidates.length > 0 && batchesProcessed < maxBatches) {
+      const batchCandidates = remainingCandidates.splice(0, batchSize);
+      const syncRecords = await fetchTcgdexSyncRecordsForCandidates(batchCandidates, priceDate);
 
-    const pricingByExternalId = new Map(
-      syncRecords.map((record) => [record.metadata.externalId, record.pricing]),
-    );
+      recordsFetched += syncRecords.length;
 
-    await mapWithConcurrency(upsertedCards, SNAPSHOT_PERSIST_CONCURRENCY, async (card) => {
-      try {
-        const pricing = pricingByExternalId.get(card.externalId);
+      const upsertedCards = await Promise.all(
+        syncRecords.map((record) =>
+          prisma.card.upsert({
+            where: { externalId: record.metadata.externalId },
+            create: {
+              ...record.metadata,
+              metadata: record.metadata.metadata as Prisma.InputJsonValue,
+            },
+            update: {
+              ...record.metadata,
+              metadata: record.metadata.metadata as Prisma.InputJsonValue,
+            },
+          }),
+        ),
+      );
 
-        if (!pricing) {
-          logger.warn("Failed to sync card pricing", {
-            cardId: card.id,
-            externalId: card.externalId,
-            error: "No pricing record was returned for a synced card.",
-          });
-          return null;
-        }
+      const pricingByExternalId = new Map(
+        syncRecords.map((record) => [record.metadata.externalId, record.pricing]),
+      );
 
-        await prisma.cardPriceSnapshot.upsert({
-          where: {
-            cardId_source_priceDate: {
+      await mapWithConcurrency(upsertedCards, SNAPSHOT_PERSIST_CONCURRENCY, async (card) => {
+        try {
+          const pricing = pricingByExternalId.get(card.externalId) ?? null;
+
+          await prisma.cardPriceSnapshot.upsert({
+            where: {
+              cardId_source_priceDate: {
+                cardId: card.id,
+                source: PriceSource.TCGDEX,
+                priceDate,
+              },
+            },
+            create: {
               cardId: card.id,
               source: PriceSource.TCGDEX,
               priceDate,
+              currency: pricing?.currency ?? null,
+              marketPrice: decimal(pricing?.marketPrice ?? null),
+              lowPrice: decimal(pricing?.lowPrice ?? null),
+              midPrice: decimal(pricing?.midPrice ?? null),
+              highPrice: decimal(pricing?.highPrice ?? null),
+              directLowPrice: decimal(pricing?.directLowPrice ?? null),
+              liquidityScore: pricing?.liquidityScore ?? null,
+              rawPayload: {
+                provider: "tcgdex",
+                pricingAvailable: pricing !== null,
+                payload: pricing?.rawPayload ?? null,
+              } as Prisma.InputJsonValue,
             },
-          },
-          create: {
+            update: {
+              currency: pricing?.currency ?? null,
+              marketPrice: decimal(pricing?.marketPrice ?? null),
+              lowPrice: decimal(pricing?.lowPrice ?? null),
+              midPrice: decimal(pricing?.midPrice ?? null),
+              highPrice: decimal(pricing?.highPrice ?? null),
+              directLowPrice: decimal(pricing?.directLowPrice ?? null),
+              liquidityScore: pricing?.liquidityScore ?? null,
+              rawPayload: {
+                provider: "tcgdex",
+                pricingAvailable: pricing !== null,
+                payload: pricing?.rawPayload ?? null,
+              } as Prisma.InputJsonValue,
+            },
+          });
+
+          await recomputeCardAnalytics(card.id, priceDate);
+
+          if (pricing !== null) {
+            recordsInserted += 1;
+          }
+
+          cardsProcessed += 1;
+          processedExternalIds.add(card.externalId);
+          return pricing;
+        } catch (error) {
+          errorsCount += 1;
+          logger.warn("Failed to sync card pricing", {
             cardId: card.id,
-            source: PriceSource.TCGDEX,
-            priceDate,
-            currency: pricing.currency,
-            marketPrice: decimal(pricing.marketPrice),
-            lowPrice: decimal(pricing.lowPrice),
-            midPrice: decimal(pricing.midPrice),
-            highPrice: decimal(pricing.highPrice),
-            directLowPrice: decimal(pricing.directLowPrice),
-            liquidityScore: pricing.liquidityScore,
-            rawPayload: pricing.rawPayload as Prisma.InputJsonValue,
-          },
-          update: {
-            currency: pricing.currency,
-            marketPrice: decimal(pricing.marketPrice),
-            lowPrice: decimal(pricing.lowPrice),
-            midPrice: decimal(pricing.midPrice),
-            highPrice: decimal(pricing.highPrice),
-            directLowPrice: decimal(pricing.directLowPrice),
-            liquidityScore: pricing.liquidityScore,
-            rawPayload: pricing.rawPayload as Prisma.InputJsonValue,
-          },
-        });
+            externalId: card.externalId,
+            error: error instanceof Error ? error.message : String(error),
+          });
+          return null;
+        }
+      });
 
-        await recomputeCardAnalytics(card.id, priceDate);
-        recordsInserted += 1;
-        return pricing;
-      } catch (error) {
-        logger.warn("Failed to sync card pricing", {
-          cardId: card.id,
-          externalId: card.externalId,
-          error: error instanceof Error ? error.message : String(error),
-        });
-        return null;
-      }
-    });
+      batchesProcessed += 1;
+    }
 
-    const errorsCount = Math.max(0, syncRecords.length - recordsInserted);
+    const remainingCount = Math.max(0, candidates.length - processedExternalIds.size);
 
     await prisma.syncRun.update({
       where: { id: syncRun.id },
       data: {
         status: SyncStatus.SUCCESS,
         finishedAt: new Date(),
-        recordsFetched: syncRecords.length,
+        recordsFetched,
         recordsInserted,
-        cardsProcessed: upsertedCards.length,
+        cardsProcessed,
         errorsCount,
         sourceSummary: {
           metadataSource: "tcgdex",
           pricingSource: "tcgdex",
-          pricingCardsOnly: true,
+          candidateLimit: limit,
+          totalCandidates: candidates.length,
+          remainingCandidates: remainingCount,
+          batchesProcessed,
+          batchSize,
+          isComplete: remainingCount === 0,
         },
       },
     });
 
     return {
       syncRunId: syncRun.id,
-      recordsFetched: syncRecords.length,
+      recordsFetched,
       recordsInserted,
-      cardsProcessed: upsertedCards.length,
+      cardsProcessed,
       errorsCount,
+      totalCandidates: candidates.length,
+      remainingCandidates: remainingCount,
+      batchesProcessed,
+      isComplete: remainingCount === 0,
     };
   } catch (error) {
     await prisma.syncRun.update({

@@ -172,6 +172,8 @@ For deployed cron:
 
 - endpoint: `GET /api/cron/sync`
 - auth: `Authorization: Bearer $CRON_SECRET` when `CRON_SECRET` is set
+- Vercel cron is configured to run every 30 minutes
+- each hosted run processes the next batch for the current day until the catalog is complete
 
 ## Model Training
 
@@ -226,7 +228,7 @@ Recommended deployment approach:
 
 ## Tradeoffs
 
-- The sync fetches a bounded universe of English cards with live pricing using `SYNC_CARD_LIMIT`. The default is `3000`, which keeps broad coverage without trying to ingest the full catalog on every daily run.
+- The default sync target is the full English catalog with pricing support. Hosted syncs advance in batches so the app does not need to finish the entire catalog in a single serverless invocation.
 - The model is logistic regression so the app can score the artifact directly in TypeScript without needing a live Python service.
 - The watchlist is a single local/global list for MVP simplicity; the schema can be extended later for auth-scoped watchlists.
 

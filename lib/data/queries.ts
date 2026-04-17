@@ -195,7 +195,8 @@ export async function getDashboardData(filters: DashboardFilters) {
   });
 
   const rows = await Promise.all(cards.map((card) => mapCardRow(card)));
-  const filteredRows = sortRows(filterRows(rows, filters), filters.sort);
+  const pricedRows = rows.filter((row) => row.currentPrice !== null);
+  const filteredRows = sortRows(filterRows(pricedRows, filters), filters.sort);
   const recentSync = await prisma.syncRun.findFirst({
     orderBy: { startedAt: "desc" },
   });
@@ -226,11 +227,15 @@ export async function getDashboardData(filters: DashboardFilters) {
       recentMovers,
     },
     filters: {
-      sets: [...new Set(rows.map((row) => row.setName))].sort(),
-      rarities: [...new Set(rows.map((row) => row.rarity).filter((value): value is string => Boolean(value)))].sort(),
+      sets: [...new Set(pricedRows.map((row) => row.setName))].sort(),
+      rarities: [
+        ...new Set(
+          pricedRows.map((row) => row.rarity).filter((value): value is string => Boolean(value)),
+        ),
+      ].sort(),
     },
     summary: {
-      totalTrackedCards: rows.length,
+      totalTrackedCards: pricedRows.length,
       lastSyncAt: recentSync?.finishedAt ?? recentSync?.startedAt ?? null,
       lastSyncStatus: recentSync?.status ?? SyncStatus.FAILED,
       modelStatus: activeModel
@@ -369,6 +374,7 @@ export async function getAdminData() {
     snapshotCount,
     config: {
       syncCardLimit: signalConfig.sync.cardLimit,
+      syncBatchSize: signalConfig.sync.batchSize,
       autoSyncEnabled: env.AUTO_SYNC_ENABLED,
       autoSyncCheckIntervalMinutes: env.AUTO_SYNC_CHECK_INTERVAL_MINUTES,
       minimumHistoryDays: signalConfig.history.minimumDays,

@@ -17,8 +17,9 @@ export async function GET(request: Request) {
     return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
   }
 
-  const result = await runSync();
+  const result = await runSync(new Date(), { maxBatches: 1 });
   return NextResponse.json(result);
 }
 
 export const POST = GET;
+export const maxDuration = 300;

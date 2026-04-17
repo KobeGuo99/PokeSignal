@@ -1,6 +1,10 @@
 import "dotenv/config";
 import { defineConfig, env } from "prisma/config";
 
+const fallbackDatabaseUrl =
+  process.env.DATABASE_URL ??
+  "postgresql://postgres:postgres@localhost:5432/pokesignal?schema=public";
+
 export default defineConfig({
   schema: "prisma/schema.prisma",
   migrations: {
@@ -8,6 +12,6 @@ export default defineConfig({
     seed: "tsx prisma/seed.ts",
   },
   datasource: {
-    url: env("DATABASE_URL"),
+    url: fallbackDatabaseUrl || env("DATABASE_URL"),
   },
 });

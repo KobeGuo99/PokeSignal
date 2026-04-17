@@ -3,6 +3,7 @@ import { env } from "@/lib/env";
 export const signalConfig = {
   sync: {
     cardLimit: env.SYNC_CARD_LIMIT,
+    batchSize: env.SYNC_BATCH_SIZE,
     pageSize: env.SYNC_PAGE_SIZE,
     retryCount: env.SYNC_RETRY_COUNT,
     retryDelayMs: env.SYNC_RETRY_DELAY_MS,

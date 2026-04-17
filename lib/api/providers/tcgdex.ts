@@ -74,7 +74,7 @@ type TcgdexCardCandidate = {
 
 export type TcgdexSyncRecord = {
   metadata: CardMetadataRecord;
-  pricing: CardPricingRecord;
+  pricing: CardPricingRecord | null;
 };
 
 const allowedEnglishSeries = new Set([
@@ -260,7 +260,9 @@ async function fetchTcgdexCardDetail(cardId: string): Promise<TcgdexCardLike> {
   return card;
 }
 
-async function listEnglishCardCandidates(limit?: number): Promise<TcgdexCardCandidate[]> {
+export async function listEnglishCardCandidates(
+  limit?: number | null,
+): Promise<TcgdexCardCandidate[]> {
   const client = createTcgdexClient();
   const setSummaries = (await client.set.list()) as Array<{ id?: string | null }> | null;
 
@@ -311,7 +313,7 @@ async function listEnglishCardCandidates(limit?: number): Promise<TcgdexCardCand
   const candidates: TcgdexCardCandidate[] = [];
   let hasRemaining = true;
 
-  while (hasRemaining && (limit === undefined || candidates.length < limit)) {
+  while (hasRemaining && (limit === undefined || limit === null || candidates.length < limit)) {
     hasRemaining = false;
 
     for (const setCandidates of groupedCandidates) {
@@ -324,7 +326,7 @@ async function listEnglishCardCandidates(limit?: number): Promise<TcgdexCardCand
       hasRemaining = true;
       candidates.push(nextCandidate);
 
-      if (limit !== undefined && candidates.length >= limit) {
+      if (limit !== undefined && limit !== null && candidates.length >= limit) {
         return candidates;
       }
     }
@@ -334,14 +336,21 @@ async function listEnglishCardCandidates(limit?: number): Promise<TcgdexCardCand
 }
 
 export async function fetchTcgdexSyncRecords(
-  limit: number,
+  limit: number | null,
   priceDate: Date,
 ): Promise<TcgdexSyncRecord[]> {
-  const candidates = await listEnglishCardCandidates();
+  const candidates = await listEnglishCardCandidates(limit);
+  return fetchTcgdexSyncRecordsForCandidates(candidates, priceDate);
+}
+
+export async function fetchTcgdexSyncRecordsForCandidates(
+  candidates: TcgdexCardCandidate[],
+  priceDate: Date,
+): Promise<TcgdexSyncRecord[]> {
   const records: TcgdexSyncRecord[] = [];
   const chunkSize = Math.max(1, env.SYNC_PAGE_SIZE);
 
-  for (let index = 0; index < candidates.length && records.length < limit; index += chunkSize) {
+  for (let index = 0; index < candidates.length; index += chunkSize) {
     const chunk = candidates.slice(index, index + chunkSize);
     const chunkResults = await mapWithConcurrency(
       chunk,
@@ -349,10 +358,6 @@ export async function fetchTcgdexSyncRecords(
       async (candidate) => {
       const card = await fetchTcgdexCardDetail(candidate.cardId);
       const pricing = mapCardPricing(card, priceDate);
-
-      if (!pricing) {
-        return null;
-      }
 
       return {
         metadata: mapCardMetadata(card, candidate.setContext),
@@ -367,10 +372,6 @@ export async function fetchTcgdexSyncRecords(
       }
 
       records.push(result);
-
-      if (records.length >= limit) {
-        break;
-      }
     }
   }
 
