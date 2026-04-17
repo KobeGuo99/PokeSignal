@@ -9,6 +9,8 @@ import { mapWithConcurrency } from "@/lib/utils/async";
 import { toStartOfDay } from "@/lib/utils/date";
 import { logger } from "@/lib/utils/logger";
 
+const SNAPSHOT_PERSIST_CONCURRENCY = 8;
+
 function rarityScore(rarity: string | null): number | null {
   if (!rarity) {
     return null;
@@ -163,7 +165,7 @@ export async function runSync(syncDate = new Date()) {
       syncRecords.map((record) => [record.metadata.externalId, record.pricing]),
     );
 
-    await mapWithConcurrency(upsertedCards, 4, async (card) => {
+    await mapWithConcurrency(upsertedCards, SNAPSHOT_PERSIST_CONCURRENCY, async (card) => {
       try {
         const pricing = pricingByExternalId.get(card.externalId);
 

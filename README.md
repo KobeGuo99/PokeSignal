@@ -226,7 +226,7 @@ Recommended deployment approach:
 
 ## Tradeoffs
 
-- The sync fetches a bounded universe of English cards with live pricing using `SYNC_CARD_LIMIT`, so you can trade off breadth versus sync time.
+- The sync fetches a bounded universe of English cards with live pricing using `SYNC_CARD_LIMIT`. The default is `3000`, which keeps broad coverage without trying to ingest the full catalog on every daily run.
 - The model is logistic regression so the app can score the artifact directly in TypeScript without needing a live Python service.
 - The watchlist is a single local/global list for MVP simplicity; the schema can be extended later for auth-scoped watchlists.
 

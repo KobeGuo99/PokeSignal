@@ -5,7 +5,7 @@ const envSchema = z.object({
   DATABASE_URL: z.string().min(1, "DATABASE_URL is required"),
   APP_URL: z.string().url().default("http://localhost:3000"),
   TCGDEX_API_URL: z.string().url().default("https://api.tcgdex.net/v2"),
-  SYNC_CARD_LIMIT: z.coerce.number().int().positive().default(800),
+  SYNC_CARD_LIMIT: z.coerce.number().int().positive().default(3000),
   SYNC_PAGE_SIZE: z.coerce.number().int().positive().max(250).default(100),
   SYNC_RETRY_COUNT: z.coerce.number().int().nonnegative().default(3),
   SYNC_RETRY_DELAY_MS: z.coerce.number().int().positive().default(500),

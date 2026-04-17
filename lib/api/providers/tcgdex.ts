@@ -81,6 +81,7 @@ const allowedEnglishSeries = new Set([
   "Sword & Shield",
   "Scarlet & Violet",
 ]);
+const CARD_DETAIL_FETCH_CONCURRENCY = 10;
 
 function createTcgdexClient(): TCGdex {
   const client = new TCGdex("en");
@@ -342,7 +343,10 @@ export async function fetchTcgdexSyncRecords(
 
   for (let index = 0; index < candidates.length && records.length < limit; index += chunkSize) {
     const chunk = candidates.slice(index, index + chunkSize);
-    const chunkResults = await mapWithConcurrency(chunk, 4, async (candidate) => {
+    const chunkResults = await mapWithConcurrency(
+      chunk,
+      Math.min(CARD_DETAIL_FETCH_CONCURRENCY, chunk.length),
+      async (candidate) => {
       const card = await fetchTcgdexCardDetail(candidate.cardId);
       const pricing = mapCardPricing(card, priceDate);
 
@@ -354,7 +358,8 @@ export async function fetchTcgdexSyncRecords(
         metadata: mapCardMetadata(card, candidate.setContext),
         pricing,
       } satisfies TcgdexSyncRecord;
-    });
+      },
+    );
 
     for (const result of chunkResults) {
       if (!result) {
@@ -376,10 +381,14 @@ export async function fetchTcgdexCardMetadata(
   limit = env.SYNC_CARD_LIMIT,
 ): Promise<CardMetadataRecord[]> {
   const candidates = await listEnglishCardCandidates(limit);
-  const detailedCards = await mapWithConcurrency(candidates, 4, async (candidate) => {
-    const card = await fetchTcgdexCardDetail(candidate.cardId);
-    return mapCardMetadata(card, candidate.setContext);
-  });
+  const detailedCards = await mapWithConcurrency(
+    candidates,
+    Math.min(CARD_DETAIL_FETCH_CONCURRENCY, candidates.length),
+    async (candidate) => {
+      const card = await fetchTcgdexCardDetail(candidate.cardId);
+      return mapCardMetadata(card, candidate.setContext);
+    },
+  );
 
   return detailedCards;
 }
