@@ -1,0 +1,49 @@
+{
+  "version": "demo-logreg-v1",
+  "algorithm": "logistic_regression",
+  "enabled": true,
+  "horizon_days": 7,
+  "features": [
+    "change1d",
+    "change7d",
+    "change30d",
+    "volatility7d",
+    "sma7",
+    "sma30",
+    "trendSlope7d",
+    "drawdownFromPeak30d",
+    "dataQualityScore",
+    "liquidityScore",
+    "setAgeDays",
+    "rarityScore"
+  ],
+  "intercept": -0.18,
+  "coefficients": [
+    0.82,
+    1.74,
+    0.56,
+    -1.1,
+    0.02,
+    0.01,
+    0.9,
+    0.64,
+    0.72,
+    0.33,
+    -0.04,
+    0.28
+  ],
+  "metrics": {
+    "valid_accuracy": 0.58,
+    "valid_precision": 0.61,
+    "valid_recall": 0.56,
+    "valid_f1": 0.58,
+    "valid_roc_auc": 0.62,
+    "test_accuracy": 0.56,
+    "test_precision": 0.57,
+    "test_recall": 0.53,
+    "test_f1": 0.55,
+    "test_roc_auc": 0.6,
+    "demo": true
+  },
+  "trained_at": "2026-04-17T00:00:00+00:00"
+}

@@ -1,0 +1,160 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum RecommendationCategory {
+  STRONG_BUY_DIP
+  WATCH
+  AVOID
+  MOMENTUM_BUY
+}
+
+enum SyncStatus {
+  RUNNING
+  SUCCESS
+  FAILED
+}
+
+enum PriceSource {
+  TCGDEX
+  DEMO
+}
+
+model Card {
+  id                      String                   @id @default(cuid())
+  externalId              String                   @unique
+  name                    String
+  setName                 String
+  setCode                 String?
+  setSeries               String?
+  setReleaseDate          DateTime?
+  number                  String?
+  rarity                  String?
+  supertype               String?
+  imageUrl                String?
+  imageLargeUrl           String?
+  metadata                Json?
+  createdAt               DateTime                 @default(now())
+  updatedAt               DateTime                 @updatedAt
+  priceSnapshots          CardPriceSnapshot[]
+  featureSnapshots        CardFeatureSnapshot[]
+  recommendationSnapshots RecommendationSnapshot[]
+  watchlistItems          WatchlistItem[]
+
+  @@index([name])
+  @@index([setName])
+  @@index([rarity])
+  @@index([setReleaseDate])
+}
+
+model CardPriceSnapshot {
+  id             String      @id @default(cuid())
+  cardId         String
+  card           Card        @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  source         PriceSource
+  priceDate      DateTime
+  currency       String?
+  marketPrice    Decimal?    @db.Decimal(12, 4)
+  lowPrice       Decimal?    @db.Decimal(12, 4)
+  midPrice       Decimal?    @db.Decimal(12, 4)
+  highPrice      Decimal?    @db.Decimal(12, 4)
+  directLowPrice Decimal?    @db.Decimal(12, 4)
+  liquidityScore Float?
+  rawPayload     Json?
+  createdAt      DateTime    @default(now())
+
+  @@unique([cardId, source, priceDate])
+  @@index([cardId, priceDate])
+  @@index([priceDate])
+  @@index([source, priceDate])
+}
+
+model CardFeatureSnapshot {
+  id                  String   @id @default(cuid())
+  cardId              String
+  card                Card     @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  asOfDate            DateTime
+  currentPrice        Float?
+  previousPrice       Float?
+  change1d            Float?
+  change7d            Float?
+  change30d           Float?
+  volatility7d        Float?
+  sma7                Float?
+  sma30               Float?
+  trendSlope7d        Float?
+  drawdownFromPeak30d Float?
+  dataQualityScore    Float?
+  dataPoints          Int      @default(0)
+  liquidityScore      Float?
+  setAgeDays          Int?
+  rarityScore         Float?
+  featurePayload      Json?
+  createdAt           DateTime @default(now())
+
+  @@unique([cardId, asOfDate])
+  @@index([asOfDate])
+  @@index([cardId, asOfDate])
+}
+
+model RecommendationSnapshot {
+  id               String                 @id @default(cuid())
+  cardId           String
+  card             Card                   @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  asOfDate         DateTime
+  category         RecommendationCategory
+  ruleScore        Float?
+  modelScore       Float?
+  confidence       Float?
+  dataQualityScore Float?
+  explanation      String
+  isModelEnabled   Boolean                @default(false)
+  createdAt        DateTime               @default(now())
+
+  @@unique([cardId, asOfDate])
+  @@index([category, asOfDate])
+  @@index([cardId, asOfDate])
+}
+
+model WatchlistItem {
+  id        String   @id @default(cuid())
+  cardId    String   @unique
+  card      Card     @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+}
+
+model SyncRun {
+  id              String     @id @default(cuid())
+  startedAt       DateTime   @default(now())
+  finishedAt      DateTime?
+  status          SyncStatus @default(RUNNING)
+  recordsFetched  Int        @default(0)
+  recordsInserted Int        @default(0)
+  cardsProcessed  Int        @default(0)
+  errorsCount     Int        @default(0)
+  errorMessage    String?
+  sourceSummary   Json?
+
+  @@index([startedAt])
+  @@index([status, startedAt])
+}
+
+model ModelVersion {
+  id           String   @id @default(cuid())
+  version      String   @unique
+  algorithm    String
+  metrics      Json
+  artifactPath String
+  featureList  Json
+  isActive     Boolean  @default(true)
+  trainedAt    DateTime
+  createdAt    DateTime @default(now())
+
+  @@index([isActive, trainedAt])
+}

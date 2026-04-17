@@ -1,0 +1,14 @@
+[
+  "change1d",
+  "change7d",
+  "change30d",
+  "volatility7d",
+  "sma7",
+  "sma30",
+  "trendSlope7d",
+  "drawdownFromPeak30d",
+  "dataQualityScore",
+  "liquidityScore",
+  "setAgeDays",
+  "rarityScore"
+]
