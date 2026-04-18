@@ -221,9 +221,7 @@ export async function getDashboardData(filters: DashboardFilters) {
   });
 
   const rows = await Promise.all(cards.map((card) => mapCardRow(card)));
-  const pricedRows = rows.filter(
-    (row) => row.currentPrice !== null && row.priceProvider === "tcgplayer",
-  );
+  const pricedRows = rows.filter((row) => row.currentPrice !== null);
   const filteredRows = sortRows(filterRows(pricedRows, filters), filters.sort);
   const recentSync = await prisma.syncRun.findFirst({
     orderBy: { startedAt: "desc" },
