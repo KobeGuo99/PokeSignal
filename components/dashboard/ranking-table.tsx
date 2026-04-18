@@ -68,6 +68,9 @@ export function RankingTable({ title, subtitle, rows }: RankingTableProps) {
                     </td>
                     <td className="px-4 py-4 font-semibold text-slate-900">
                       {formatCurrency(row.currentPrice, row.currency ?? undefined)}
+                      <p className="mt-1 text-xs font-normal text-slate-500">
+                        {row.priceProvider === "tcgplayer" ? "TCGplayer market" : "Fallback market"}
+                      </p>
                     </td>
                     <td className="px-4 py-4">
                       <ChangePill value={row.change1d} />

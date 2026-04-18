@@ -75,12 +75,12 @@ export function FilterBar({ filters, availableSets, availableRarities }: FilterB
         <label className="space-y-2 text-sm font-medium text-slate-700">
           Sort by
           <select name="sort" defaultValue={filters.sort} className="w-full rounded-2xl border bg-white px-3 py-2.5">
-            <option value="score">Rule score</option>
+            <option value="price">Price</option>
             <option value="confidence">Confidence</option>
             <option value="change1d">1d change</option>
             <option value="change7d">7d change</option>
             <option value="change30d">30d change</option>
-            <option value="price">Current price</option>
+            <option value="score">Rule score</option>
           </select>
         </label>
       </div>

@@ -1,6 +1,8 @@
 # PokeSignal
 
-PokeSignal is a practical MVP for tracking Pokemon card prices over time, storing daily snapshots, and turning those snapshots into interpretable buy/watch/avoid signals.
+PokeSignal is a personal project I built, by Kobe Guo, to track Pokemon card prices over time, store daily snapshots, and turn those snapshots into interpretable buy/watch/avoid signals.
+
+Live site: `https://tcgtracker-eosin.vercel.app`
 
 The system intentionally favors:
 
@@ -11,7 +13,7 @@ The system intentionally favors:
 
 ## Architecture Summary
 
-PokeSignal is a single Next.js application with a PostgreSQL database and a small Python training pipeline:
+I built PokeSignal as a single Next.js application with a PostgreSQL database and a small Python training pipeline:
 
 - Next.js App Router handles the dashboard, card detail page, watchlist, admin page, and API routes.
 - Prisma stores cards, daily price snapshots, computed feature snapshots, recommendation snapshots, sync runs, watchlist items, and model versions.
@@ -212,7 +214,7 @@ npm run lint
 
 ## Deployment Notes
 
-This MVP is easiest to deploy as:
+This project is easiest to deploy as:
 
 - Vercel for the Next.js app
 - managed PostgreSQL such as Neon, Supabase Postgres, or Railway

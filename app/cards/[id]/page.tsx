@@ -86,6 +86,12 @@ export default async function CardDetailPage({
               </p>
               <p className="text-xs text-slate-500">
                 Latest stored market snapshot: {data.latestPriceSnapshot?.priceDate.toISOString().slice(0, 10) ?? "N/A"}{" "}
+                {data.priceProvider === "tcgplayer"
+                  ? "(TCGplayer market data)"
+                  : data.priceProvider === "cardmarket"
+                    ? "(Cardmarket fallback data)"
+                    : ""}
+                {" "}
                 {data.convertedFromCurrency && data.eurToUsdRate
                   ? `(displayed in USD from ${data.convertedFromCurrency} at ${data.eurToUsdRate.toFixed(4)} EUR/USD)`
                   : data.displayCurrency
@@ -164,7 +170,16 @@ export default async function CardDetailPage({
                     <td className="px-4 py-3">{formatCurrency(snapshot.marketPrice, snapshot.currency ?? undefined)}</td>
                     <td className="px-4 py-3">{formatCurrency(snapshot.lowPrice, snapshot.currency ?? undefined)}</td>
                     <td className="px-4 py-3">{formatCurrency(snapshot.highPrice, snapshot.currency ?? undefined)}</td>
-                    <td className="px-4 py-3">{snapshot.source}</td>
+                    <td className="px-4 py-3">
+                      {snapshot.source}
+                      <div className="text-xs text-slate-500">
+                        {snapshot.priceProvider === "tcgplayer"
+                          ? "TCGplayer"
+                          : snapshot.priceProvider === "cardmarket"
+                            ? "Cardmarket fallback"
+                            : "Unknown pricing source"}
+                      </div>
+                    </td>
                   </tr>
                 ))}
               </tbody>

@@ -15,6 +15,7 @@ export type SignalCardView = {
   currentPrice: number | null;
   currency: string | null;
   sourceCurrency: string | null;
+  priceProvider: "tcgplayer" | "cardmarket" | "unknown";
   change1d: number | null;
   change7d: number | null;
   change30d: number | null;
@@ -75,10 +76,34 @@ type CardWithLatestSnapshots = Prisma.CardGetPayload<{
   };
 }>;
 
+function getPricingProvider(rawPayload: Prisma.JsonValue | null): "tcgplayer" | "cardmarket" | "unknown" {
+  if (!rawPayload || typeof rawPayload !== "object" || Array.isArray(rawPayload)) {
+    return "unknown";
+  }
+
+  const provider =
+    ("pricingProvider" in rawPayload ? rawPayload.pricingProvider : null) ??
+    ("payload" in rawPayload &&
+    rawPayload.payload &&
+    typeof rawPayload.payload === "object" &&
+    !Array.isArray(rawPayload.payload) &&
+    "pricingProvider" in rawPayload.payload
+      ? rawPayload.payload.pricingProvider
+      : null);
+
+  if (provider === "tcgplayer" || provider === "cardmarket") {
+    return provider;
+  }
+
+  return "unknown";
+}
+
 async function mapCardRow(card: CardWithLatestSnapshots): Promise<SignalCardView> {
   const latestFeature = card.featureSnapshots[0];
   const latestRecommendation = card.recommendationSnapshots[0];
-  const sourceCurrency = card.priceSnapshots[0]?.currency ?? null;
+  const latestPriceSnapshot = card.priceSnapshots[0];
+  const sourceCurrency = latestPriceSnapshot?.currency ?? null;
+  const priceProvider = getPricingProvider(latestPriceSnapshot?.rawPayload ?? null);
   const currentPrice = await convertToUsd(latestFeature?.currentPrice ?? null, sourceCurrency);
   const { displayCurrency } = await getUsdDisplayMetadata(sourceCurrency);
 
@@ -92,6 +117,7 @@ async function mapCardRow(card: CardWithLatestSnapshots): Promise<SignalCardView
     currentPrice,
     currency: displayCurrency,
     sourceCurrency,
+    priceProvider,
     change1d: latestFeature?.change1d ?? null,
     change7d: latestFeature?.change7d ?? null,
     change30d: latestFeature?.change30d ?? null,
@@ -195,7 +221,9 @@ export async function getDashboardData(filters: DashboardFilters) {
   });
 
   const rows = await Promise.all(cards.map((card) => mapCardRow(card)));
-  const pricedRows = rows.filter((row) => row.currentPrice !== null);
+  const pricedRows = rows.filter(
+    (row) => row.currentPrice !== null && row.priceProvider === "tcgplayer",
+  );
   const filteredRows = sortRows(filterRows(pricedRows, filters), filters.sort);
   const recentSync = await prisma.syncRun.findFirst({
     orderBy: { startedAt: "desc" },
@@ -276,6 +304,7 @@ export async function getCardDetail(cardId: string) {
   }
 
   const sourceCurrency = card.priceSnapshots.at(-1)?.currency ?? null;
+  const priceProvider = getPricingProvider(card.priceSnapshots.at(-1)?.rawPayload ?? null);
   const latestFeatureSnapshot = card.featureSnapshots[0] ?? null;
   const latestRecommendation = card.recommendationSnapshots[0] ?? null;
   const displayMetadata = await getUsdDisplayMetadata(sourceCurrency);
@@ -295,6 +324,7 @@ export async function getCardDetail(cardId: string) {
     latestRecommendation,
     isWatchlisted: card.watchlistItems.length > 0,
     latestPriceSnapshot: card.priceSnapshots.at(-1) ?? null,
+    priceProvider,
     displayCurrency: displayMetadata.displayCurrency,
     convertedFromCurrency: displayMetadata.convertedFromCurrency,
     eurToUsdRate: displayMetadata.eurToUsdRate,
@@ -315,6 +345,7 @@ export async function getCardDetail(cardId: string) {
         ),
         currency: displayMetadata.displayCurrency,
         source: snapshot.source,
+        priceProvider: getPricingProvider(snapshot.rawPayload),
       })),
     ),
   };
@@ -393,6 +424,6 @@ export function getDefaultFilters(searchParams: Record<string, string | string[]
     minPrice: typeof searchParams.minPrice === "string" ? searchParams.minPrice : "",
     maxPrice: typeof searchParams.maxPrice === "string" ? searchParams.maxPrice : "",
     minHistory: typeof searchParams.minHistory === "string" ? searchParams.minHistory : "",
-    sort: typeof searchParams.sort === "string" ? searchParams.sort : "score",
+    sort: typeof searchParams.sort === "string" ? searchParams.sort : "price",
   };
 }
