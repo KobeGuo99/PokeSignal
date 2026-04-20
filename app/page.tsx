@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import { Panel } from "@/components/ui/panel";
 import { FilterBar } from "@/components/dashboard/filter-bar";
 import { RankingTable } from "@/components/dashboard/ranking-table";
@@ -5,6 +7,32 @@ import { getDashboardData, getDefaultFilters } from "@/lib/data/queries";
 import { formatRelativeTime } from "@/lib/utils/format";
 
 export const dynamic = "force-dynamic";
+
+function buildLoadMoreHref(
+  searchParams: Record<string, string | string[] | undefined>,
+  nextLimit: number,
+): string {
+  const params = new URLSearchParams();
+
+  for (const [key, value] of Object.entries(searchParams)) {
+    if (key === "limit" || value === undefined) {
+      continue;
+    }
+
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        params.append(key, item);
+      }
+      continue;
+    }
+
+    params.set(key, value);
+  }
+
+  params.set("limit", String(nextLimit));
+
+  return `/?${params.toString()}`;
+}
 
 export default async function DashboardPage({
   searchParams,
@@ -14,6 +42,10 @@ export default async function DashboardPage({
   const resolvedSearchParams = await searchParams;
   const filters = getDefaultFilters(resolvedSearchParams);
   const data = await getDashboardData(filters);
+  const loadMoreHref = buildLoadMoreHref(
+    resolvedSearchParams,
+    data.pagination.nextLimit,
+  );
 
   return (
     <div className="space-y-6">
@@ -71,9 +103,20 @@ export default async function DashboardPage({
 
       <RankingTable
         title="All Ranked Cards"
-        subtitle="Filtered universe ranked by the selected sort."
+        subtitle={`Showing ${data.pagination.visibleCount} of ${data.summary.filteredTrackedCards} filtered cards.`}
         rows={data.rows}
       />
+
+      {data.pagination.hasMore ? (
+        <div className="flex justify-center">
+          <Link
+            className="rounded-full border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-800 shadow-sm transition hover:border-slate-400 hover:text-slate-950"
+            href={loadMoreHref}
+          >
+            Load 50 more cards
+          </Link>
+        </div>
+      ) : null}
     </div>
   );
 }

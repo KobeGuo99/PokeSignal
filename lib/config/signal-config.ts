@@ -5,6 +5,8 @@ export const signalConfig = {
     cardLimit: env.SYNC_CARD_LIMIT,
     batchSize: env.SYNC_BATCH_SIZE,
     pageSize: env.SYNC_PAGE_SIZE,
+    maxBatchesPerInvocation: env.SYNC_MAX_BATCHES_PER_INVOCATION,
+    maxChainDepth: env.SYNC_MAX_CHAIN_DEPTH,
     retryCount: env.SYNC_RETRY_COUNT,
     retryDelayMs: env.SYNC_RETRY_DELAY_MS,
   },

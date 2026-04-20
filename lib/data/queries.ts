@@ -39,7 +39,11 @@ export type DashboardFilters = {
   maxPrice: string;
   minHistory: string;
   sort: string;
+  limit: number;
 };
+
+const DASHBOARD_DEFAULT_LIMIT = 50;
+const DASHBOARD_LOAD_INCREMENT = 50;
 
 function parseNumber(value: string): number | null {
   if (!value) {
@@ -223,6 +227,7 @@ export async function getDashboardData(filters: DashboardFilters) {
   const rows = await Promise.all(cards.map((card) => mapCardRow(card)));
   const pricedRows = rows.filter((row) => row.currentPrice !== null);
   const filteredRows = sortRows(filterRows(pricedRows, filters), filters.sort);
+  const visibleRows = filteredRows.slice(0, filters.limit);
   const recentSync = await prisma.syncRun.findFirst({
     orderBy: { startedAt: "desc" },
   });
@@ -245,7 +250,7 @@ export async function getDashboardData(filters: DashboardFilters) {
     .slice(0, 6);
 
   return {
-    rows: filteredRows,
+    rows: visibleRows,
     sections: {
       topStrongBuyDip,
       topMomentumBuy,
@@ -262,6 +267,7 @@ export async function getDashboardData(filters: DashboardFilters) {
     },
     summary: {
       totalTrackedCards: pricedRows.length,
+      filteredTrackedCards: filteredRows.length,
       lastSyncAt: recentSync?.finishedAt ?? recentSync?.startedAt ?? null,
       lastSyncStatus: recentSync?.status ?? SyncStatus.FAILED,
       modelStatus: activeModel
@@ -272,6 +278,13 @@ export async function getDashboardData(filters: DashboardFilters) {
             enabled: env.ENABLE_MODEL_SCORING,
           }
         : null,
+    },
+    pagination: {
+      limit: filters.limit,
+      visibleCount: visibleRows.length,
+      totalCount: filteredRows.length,
+      hasMore: filteredRows.length > visibleRows.length,
+      nextLimit: Math.min(filteredRows.length, filters.limit + DASHBOARD_LOAD_INCREMENT),
     },
   };
 }
@@ -404,6 +417,9 @@ export async function getAdminData() {
     config: {
       syncCardLimit: signalConfig.sync.cardLimit,
       syncBatchSize: signalConfig.sync.batchSize,
+      syncPageSize: signalConfig.sync.pageSize,
+      syncMaxBatchesPerInvocation: signalConfig.sync.maxBatchesPerInvocation,
+      syncMaxChainDepth: signalConfig.sync.maxChainDepth,
       autoSyncEnabled: env.AUTO_SYNC_ENABLED,
       autoSyncCheckIntervalMinutes: env.AUTO_SYNC_CHECK_INTERVAL_MINUTES,
       minimumHistoryDays: signalConfig.history.minimumDays,
@@ -414,6 +430,13 @@ export async function getAdminData() {
 }
 
 export function getDefaultFilters(searchParams: Record<string, string | string[] | undefined>): DashboardFilters {
+  const parsedLimit =
+    typeof searchParams.limit === "string" ? Number(searchParams.limit) : NaN;
+  const limit =
+    Number.isFinite(parsedLimit) && parsedLimit > 0
+      ? Math.min(Math.trunc(parsedLimit), 500)
+      : DASHBOARD_DEFAULT_LIMIT;
+
   return {
     search: typeof searchParams.search === "string" ? searchParams.search : "",
     set: typeof searchParams.set === "string" ? searchParams.set : "",
@@ -423,5 +446,6 @@ export function getDefaultFilters(searchParams: Record<string, string | string[]
     maxPrice: typeof searchParams.maxPrice === "string" ? searchParams.maxPrice : "",
     minHistory: typeof searchParams.minHistory === "string" ? searchParams.minHistory : "",
     sort: typeof searchParams.sort === "string" ? searchParams.sort : "price",
+    limit,
   };
 }
